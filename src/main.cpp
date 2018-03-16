@@ -26,7 +26,7 @@ using seqan::isSet;
 
 using seqan::SAValue;
 using seqan::Index;
-using seqan::IndexEsa;
+using seqan::IndexSa;
 using seqan::indexRequire;
 using seqan::Finder;
 using seqan::position;
@@ -107,8 +107,8 @@ parseArguments(ReadFilterOptions& options, int argc, char const** argv) {
             return ArgumentParser::PARSE_ERROR;
         }
 
-        getOptionValue(options.out1, parser, "out2");
-    } else if(isSet(parser, "out1") && options.paired_reads) {
+        getOptionValue(options.out2, parser, "out2");
+    } else if(options.do_filter && options.paired_reads) {
         std::cerr << "ERROR: using paired FASTQ input, but no second FASTQ output file set." << std::endl;
         return ArgumentParser::PARSE_ERROR;
     }
@@ -177,55 +177,49 @@ int main(int argc, char const** argv) {
     }
 
     // Check if index already exists
-    typedef Index<TShortReadSet, IndexEsa<>> TShortReadIndex;
+    typedef Index<TShortReadSet, IndexSa<>> TShortReadIndex;
 
     bool build_index = false;
-    TShortReadIndex esa_index1;
-    TShortReadIndex esa_index2;
+    TShortReadIndex sa_index1;
+    TShortReadIndex sa_index2;
 
-    auto esa_file1 = CharString(options.fastq1);
-    seqan::append(esa_file1, ".esa");
+    auto sa_file1 = CharString(options.fastq1);
+    seqan::append(sa_file1, ".sa");
 
-    auto esa_file2 = CharString(options.fastq2);
-    seqan::append(esa_file2, ".esa");
+    auto sa_file2 = CharString(options.fastq2);
+    seqan::append(sa_file2, ".sa");
 
     std::cerr << "Loading index 1..." << std::endl;
-    if(!open(esa_index1, seqan::toCString(esa_file1))) {
+    if(!open(sa_index1, seqan::toCString(sa_file1))) {
         std::cerr << "Could not open index 1, force rebuilding..." << std::endl;
         build_index = true;
     }
 
     std::cerr << "Loading index 2..." << std::endl;
-    if(options.paired_reads && !open(esa_index2, seqan::toCString(esa_file2))) {
+    if(options.paired_reads && !open(sa_index2, seqan::toCString(sa_file2))) {
         std::cerr << "Could not open index 2, force rebuilding..." << std::endl;
         build_index = true;
     }
 
     if(build_index) {
         std::cerr << "Creating index 1..." << std::endl;
-        esa_index1 = TShortReadIndex(reads1);
+        sa_index1 = TShortReadIndex(reads1);
 
         std::cerr << "Creating suffix array..." << std::endl;
-        indexRequire(esa_index1, seqan::EsaSA());
-
-        std::cerr << "Creating longest common prefix array..." << std::endl;
-        indexRequire(esa_index1, seqan::EsaLcp());
+        indexRequire(sa_index1, seqan::FibreSA());
 
         std::cerr << "Saving index to file..." << std::endl;
-        save(esa_index1, seqan::toCString(esa_file1));
+        save(sa_index1, seqan::toCString(sa_file1));
 
         if(options.paired_reads) {
             std::cerr << "Creating index 2..." << std::endl;
-            esa_index2 = TShortReadIndex(reads2);
+            sa_index2 = TShortReadIndex(reads2);
 
             std::cerr << "Creating suffix array..." << std::endl;
-            indexRequire(esa_index2, seqan::EsaSA());
-
-            std::cerr << "Creating longest common prefix array..." << std::endl;
-            indexRequire(esa_index2, seqan::EsaLcp());
+            indexRequire(sa_index2, seqan::FibreSA());
 
             std::cerr << "Saving index to file..." << std::endl;
-            save(esa_index2, seqan::toCString(esa_file2));
+            save(sa_index2, seqan::toCString(sa_file2));
         }
     }
 
@@ -238,8 +232,8 @@ int main(int argc, char const** argv) {
     std::unordered_set<unsigned int> reads_to_keep;
 
     std::string kmer;
-    Finder<TShortReadIndex> kmer_finder1(esa_index1);
-    Finder<TShortReadIndex> kmer_finder2(esa_index2);
+    Finder<TShortReadIndex> kmer_finder1(sa_index1);
+    Finder<TShortReadIndex> kmer_finder2(sa_index2);
 
     std::cerr << "Searching for given k-mers in the reads..." << std::endl;
     while(std::getline(std::cin, kmer)) {
@@ -280,13 +274,13 @@ int main(int argc, char const** argv) {
 
     std::cerr << "Number of reads to keep: " << reads_to_keep.size() << std::endl;
 
-    SeqFileOut out1(seqan::toCString(options.out1));
+    SeqFileOut out1(seqan::toCString(options.out1),
+            seqan::FileOpenMode::OPEN_WRONLY | seqan::FileOpenMode::OPEN_CREATE);
     SeqFileOut out2;
 
     if(options.paired_reads) {
-        if(!open(out2, seqan::toCString(options.out2))) {
-            throw seqan::IOError("Could not open output file 2!");
-        }
+        open(out2, seqan::toCString(options.out2),
+             seqan::FileOpenMode::OPEN_WRONLY | seqan::FileOpenMode::OPEN_CREATE);
     }
 
     for(auto read_num : reads_to_keep) {
