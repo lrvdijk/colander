@@ -10,6 +10,8 @@ using seqan::CharString;
 using seqan::DnaString;
 using seqan::Dna5String;
 using seqan::StringSet;
+using seqan::Owner;
+using seqan::ConcatDirect;
 using seqan::reverseComplement;
 
 using seqan::SeqFileIn;
@@ -34,7 +36,7 @@ using seqan::position;
 template <typename TString>
 using TReadsAndIDs = std::tuple<StringSet<CharString>, StringSet<TString>, StringSet<CharString>>;
 
-using TShortReadSet = StringSet<Dna5String>;
+using TShortReadSet = StringSet<Dna5String, Owner<ConcatDirect<Dna5String>>>;
 
 
 /**
